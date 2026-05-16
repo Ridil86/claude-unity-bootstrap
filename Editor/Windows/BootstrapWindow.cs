@@ -33,6 +33,10 @@ namespace RockRabbit.ClaudeUnityBootstrap.Editor.Windows
         string bridgeError;
         double bridgeStartDeadline; // EditorApplication.timeSinceStartup; 0 when no start in flight.
 
+        StepStatus sessionStatus = StepStatus.Unknown;
+        string sessionError;
+        double sessionStartDeadline;
+
         const string ClaudeCodeVerifiedKey = "RockRabbit.ClaudeBootstrap.ClaudeCodeVerified";
 
         StepStatus promptsFolderStatus = StepStatus.Unknown;
@@ -76,6 +80,7 @@ namespace RockRabbit.ClaudeUnityBootstrap.Editor.Windows
             RefreshPrereqs();
             RefreshCoplayDev();
             RefreshBridge();
+            RefreshSession();
             RefreshPromptsFolder();
             RefreshMcpJson();
             RefreshClaudeMd();
@@ -117,6 +122,28 @@ namespace RockRabbit.ClaudeUnityBootstrap.Editor.Windows
             {
                 bridgeStatus = StepStatus.Failed;
                 bridgeError = ex.Message;
+            }
+        }
+
+        void RefreshSession()
+        {
+            if (!McpIntegrationApi.IsAvailable)
+            {
+                sessionStatus = StepStatus.Pending;
+                sessionError = "Install CoplayDev unity-mcp first (Step 2).";
+                return;
+            }
+            if (sessionStatus == StepStatus.InProgress) return; // don't disturb an in-flight start.
+            try
+            {
+                bool running = McpIntegrationApi.IsSessionRunning?.Invoke() ?? false;
+                sessionStatus = running ? StepStatus.Done : StepStatus.Pending;
+                sessionError = null;
+            }
+            catch (Exception ex)
+            {
+                sessionStatus = StepStatus.Failed;
+                sessionError = ex.Message;
             }
         }
 
@@ -178,6 +205,25 @@ namespace RockRabbit.ClaudeUnityBootstrap.Editor.Windows
                     bridgeStatus = StepStatus.Failed;
                     bridgeError = "Bridge did not become reachable within 10 seconds.";
                     bridgeStartDeadline = 0;
+                    Repaint();
+                }
+            }
+
+            // Session start is fire-and-forget on CoplayDev's side. Poll IsSessionRunning.
+            if (sessionStatus == StepStatus.InProgress && sessionStartDeadline > 0)
+            {
+                if (McpIntegrationApi.IsSessionRunning?.Invoke() ?? false)
+                {
+                    sessionStatus = StepStatus.Done;
+                    sessionError = null;
+                    sessionStartDeadline = 0;
+                    Repaint();
+                }
+                else if (EditorApplication.timeSinceStartup > sessionStartDeadline)
+                {
+                    sessionStatus = StepStatus.Failed;
+                    sessionError = "MCP session did not start within 30 seconds. Try clicking Start Session manually in Window > MCP for Unity.";
+                    sessionStartDeadline = 0;
                     Repaint();
                 }
             }
@@ -351,6 +397,34 @@ namespace RockRabbit.ClaudeUnityBootstrap.Editor.Windows
             return EditorPrefs.GetBool(ProjectScopedClaudeCodeKey(), false);
         }
 
+        void ActionStartSession()
+        {
+            if (!McpIntegrationApi.IsAvailable) return;
+            try
+            {
+                McpIntegrationApi.StartSession?.Invoke();
+                if (McpIntegrationApi.IsSessionRunning?.Invoke() ?? false)
+                {
+                    sessionStatus = StepStatus.Done;
+                    sessionError = null;
+                    sessionStartDeadline = 0;
+                }
+                else
+                {
+                    sessionStatus = StepStatus.InProgress;
+                    sessionError = null;
+                    // Session start can take a while on Windows (uv resolves the Python env on first run).
+                    sessionStartDeadline = EditorApplication.timeSinceStartup + 30.0;
+                }
+            }
+            catch (Exception ex)
+            {
+                sessionStatus = StepStatus.Failed;
+                sessionError = ex.Message;
+                sessionStartDeadline = 0;
+            }
+        }
+
         void ActionCreatePromptsFolder()
         {
             var path = BootstrapSettings.PromptsFolder;
@@ -424,8 +498,9 @@ namespace RockRabbit.ClaudeUnityBootstrap.Editor.Windows
                 return;
             }
             if (coplayDevStatus == StepStatus.Pending) ActionInstallCoplayDev();
-            // Bridge / mcp.json / etc. wait until CoplayDev finishes installing.
+            // Bridge / session / mcp.json / etc. wait until CoplayDev finishes installing.
             if (coplayDevStatus == StepStatus.Done && bridgeStatus == StepStatus.Pending) ActionStartBridge();
+            if (bridgeStatus == StepStatus.Done && sessionStatus == StepStatus.Pending) ActionStartSession();
             if (promptsFolderStatus == StepStatus.Pending) ActionCreatePromptsFolder();
             if (mcpJsonStatus == StepStatus.Pending || mcpJsonStatus == StepStatus.Warning) ActionWriteMcpJson();
             if (claudeMdStatus == StepStatus.Pending) ActionWriteClaudeMd();
@@ -453,11 +528,12 @@ namespace RockRabbit.ClaudeUnityBootstrap.Editor.Windows
             DrawStep_Prereqs();
             DrawStep_CoplayDev();
             DrawStep_Bridge();
+            DrawStep_Session();
             DrawStep_PromptsFolder();
             DrawStep_McpJson();
             DrawStep_ClaudeMd();
-            DrawStep_PromptRunner();
             DrawStep_ClaudeCodeVerify();
+            DrawStep_PromptRunner();
 
             EditorGUILayout.EndScrollView();
         }
@@ -519,12 +595,13 @@ namespace RockRabbit.ClaudeUnityBootstrap.Editor.Windows
         {
             string detail = bridgeStatus switch
             {
-                StepStatus.Done => $"Running at {bridgeUrl}",
+                StepStatus.Done => $"HTTP server up at {bridgeUrl}",
+                StepStatus.InProgress => "Waiting for HTTP listener to bind...",
                 StepStatus.Pending => bridgeError ?? "Bridge is not running.",
                 StepStatus.Failed => bridgeError ?? "Bridge start failed.",
                 _ => ""
             };
-            BeginStep("3. MCP bridge running", "Starts CoplayDev's local HTTP MCP server.",
+            BeginStep("3. MCP bridge HTTP server", "Starts CoplayDev's local HTTP listener — the port that clients connect to.",
                 bridgeStatus, detail);
 
             using (new EditorGUI.DisabledScope(!McpIntegrationApi.IsAvailable))
@@ -534,6 +611,31 @@ namespace RockRabbit.ClaudeUnityBootstrap.Editor.Windows
                     if (GUILayout.Button("Start bridge", GUILayout.Width(120))) ActionStartBridge();
                 }
                 else if (GUILayout.Button("Re-check", GUILayout.Width(120))) RefreshBridge();
+            }
+            EndStep();
+        }
+
+        void DrawStep_Session()
+        {
+            string detail = sessionStatus switch
+            {
+                StepStatus.Done => "MCP session active. Clients can connect and call tools.",
+                StepStatus.InProgress => "Starting session... (uv may resolve a Python env on first run; can take 10–30s)",
+                StepStatus.Pending => sessionError ?? "Session not started — clients won't be able to call MCP tools.",
+                StepStatus.Failed => sessionError ?? "Session start failed.",
+                _ => ""
+            };
+            BeginStep("4. MCP session started",
+                "Starts the MCP session itself (separate from the HTTP listener). Required for Claude Code to actually invoke tools.",
+                sessionStatus, detail);
+
+            using (new EditorGUI.DisabledScope(!McpIntegrationApi.IsAvailable || bridgeStatus != StepStatus.Done))
+            {
+                if (sessionStatus != StepStatus.Done)
+                {
+                    if (GUILayout.Button("Start session", GUILayout.Width(120))) ActionStartSession();
+                }
+                else if (GUILayout.Button("Re-check", GUILayout.Width(120))) RefreshSession();
             }
             EndStep();
         }
@@ -548,7 +650,7 @@ namespace RockRabbit.ClaudeUnityBootstrap.Editor.Windows
                 StepStatus.Failed => promptsFolderError ?? "Could not create folder.",
                 _ => ""
             };
-            BeginStep("4. Prompts folder", "Creates the prompts queue location.",
+            BeginStep("5. Prompts folder", "Creates the prompts queue location.",
                 promptsFolderStatus, detail);
 
             if (promptsFolderStatus != StepStatus.Done)
@@ -578,7 +680,7 @@ namespace RockRabbit.ClaudeUnityBootstrap.Editor.Windows
                 StepStatus.Failed => mcpJsonError ?? "Write failed.",
                 _ => ""
             };
-            BeginStep("5. .mcp.json configured", "Writes/merges the project-root Claude Code MCP config.",
+            BeginStep("6. .mcp.json configured", "Writes/merges the project-root Claude Code MCP config.",
                 mcpJsonStatus, detail);
 
             if (mcpJsonStatus != StepStatus.Done)
@@ -598,7 +700,7 @@ namespace RockRabbit.ClaudeUnityBootstrap.Editor.Windows
                 StepStatus.Failed => claudeMdError ?? "Write failed.",
                 _ => ""
             };
-            BeginStep("6. CLAUDE.md section", "Appends/refreshes the bootstrap-managed Asset Workflow section.",
+            BeginStep("7. CLAUDE.md section", "Appends/refreshes the bootstrap-managed Asset Workflow section.",
                 claudeMdStatus, detail);
 
             if (claudeMdStatus != StepStatus.Done)
@@ -611,7 +713,7 @@ namespace RockRabbit.ClaudeUnityBootstrap.Editor.Windows
 
         void DrawStep_PromptRunner()
         {
-            BeginStep("7. Prompt Runner reachable",
+            BeginStep("9. Prompt Runner reachable",
                 "Opens Window > Claude > Prompt Runner. Optionally generate a one-shot smoke test " +
                 "prompt to verify the full pipeline (md → Assistant Agent mode → asset creation).",
                 StepStatus.Unknown, "");

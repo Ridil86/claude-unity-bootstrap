@@ -20,6 +20,8 @@ namespace RockRabbit.ClaudeUnityBootstrap.Editor.McpIntegration
             McpIntegrationApi.GetMcpRpcUrl = GetMcpRpcUrl;
             McpIntegrationApi.IsBridgeRunning = IsBridgeRunning;
             McpIntegrationApi.EnsureBridgeRunning = EnsureBridgeRunning;
+            McpIntegrationApi.IsSessionRunning = IsSessionRunning;
+            McpIntegrationApi.StartSession = StartSession;
         }
 
         /// <summary>The live JSON-RPC endpoint URL the bridge serves on (base + "/mcp").</summary>
@@ -45,6 +47,26 @@ namespace RockRabbit.ClaudeUnityBootstrap.Editor.McpIntegration
             if (server.IsLocalHttpServerReachable()) return true;
             server.StartLocalHttpServer(quiet: true);
             return server.IsLocalHttpServerReachable();
+        }
+
+        /// <summary>True when the MCP session is active (CoplayDev calls this Bridge.IsRunning).</summary>
+        public static bool IsSessionRunning()
+        {
+            var bridge = MCPServiceLocator.Bridge;
+            return bridge != null && bridge.IsRunning;
+        }
+
+        /// <summary>
+        /// Fire-and-forget start of the MCP session. Idempotent — no-op when already running.
+        /// The underlying <c>Bridge.StartAsync</c> is awaitable, but consumers of this façade
+        /// poll <see cref="IsSessionRunning"/> instead.
+        /// </summary>
+        public static void StartSession()
+        {
+            var bridge = MCPServiceLocator.Bridge;
+            if (bridge == null) return;
+            if (bridge.IsRunning) return;
+            _ = bridge.StartAsync();
         }
     }
 }

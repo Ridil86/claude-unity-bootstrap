@@ -7,6 +7,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 _Nothing yet._
 
+## [0.1.5] - 2026-05-16
+
+### Added
+- **New Step 4 — "MCP session started"**, sitting between the HTTP bridge (Step 3) and the prompts folder (now Step 5). Calls `MCPServiceLocator.Bridge.StartAsync()` and polls `MCPServiceLocator.Bridge.IsRunning` for up to 30s. Previously the wizard only started the HTTP listener, which meant clients could reach the port but no actual MCP session was available — users had to manually click "Start Session" in CoplayDev's `Window > MCP for Unity` to get tool invocation working. This step does that automatically.
+- `McpIntegrationApi.IsSessionRunning` and `McpIntegrationApi.StartSession` delegates, with implementations in the optional `McpIntegration` asmdef.
+
+### Changed
+- **Steps 8 and 9 swapped.** "Verify Claude Code MCP connection" is now Step 8 (before "Prompt Runner reachable" at Step 9). Claude Code connectivity is the more fundamental check; the Prompt Runner smoke test follows naturally afterward.
+- Renumbered Steps 4–7 (Prompts folder, .mcp.json, CLAUDE.md, etc.) up by one to make room for the new Session step.
+
 ## [0.1.4] - 2026-05-16
 
 ### Fixed
