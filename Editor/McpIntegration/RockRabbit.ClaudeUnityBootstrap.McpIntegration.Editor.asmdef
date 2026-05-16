@@ -1,0 +1,27 @@
+{
+    "name": "RockRabbit.ClaudeUnityBootstrap.McpIntegration.Editor",
+    "rootNamespace": "RockRabbit.ClaudeUnityBootstrap.Editor.McpIntegration",
+    "references": [
+        "RockRabbit.ClaudeUnityBootstrap.Editor",
+        "MCPForUnity.Editor"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [
+        "MCP_FOR_UNITY_PRESENT"
+    ],
+    "versionDefines": [
+        {
+            "name": "com.coplaydev.unity-mcp",
+            "expression": "0.0.0",
+            "define": "MCP_FOR_UNITY_PRESENT"
+        }
+    ],
+    "noEngineReferences": false
+}

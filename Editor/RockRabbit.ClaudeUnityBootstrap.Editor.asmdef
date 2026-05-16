@@ -1,0 +1,25 @@
+{
+    "name": "RockRabbit.ClaudeUnityBootstrap.Editor",
+    "rootNamespace": "RockRabbit.ClaudeUnityBootstrap.Editor",
+    "references": [
+        "Unity.AI.Assistant.API.Editor",
+        "Unity.Nuget.Newtonsoft-Json"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [
+        {
+            "name": "com.coplaydev.unity-mcp",
+            "expression": "0.0.0",
+            "define": "MCP_FOR_UNITY_PRESENT"
+        }
+    ],
+    "noEngineReferences": false
+}

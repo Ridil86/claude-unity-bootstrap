@@ -1,0 +1,20 @@
+# Changelog
+
+All notable changes to **Claude Unity Bootstrap** are documented here.
+The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [Unreleased]
+
+_Nothing yet._
+
+## [0.1.0] - 2026-05-16
+
+First public release. Lifted from embedded development inside Spiritbound to a standalone Git repo.
+
+### Added
+- Package skeleton (`package.json` with publishing metadata, asmdefs, license, changelog).
+- `BootstrapWindow` step-by-step installer (`Window > Claude > Bootstrap`) — 7-step idempotent checklist covering prereqs, CoplayDev install, bridge start, `_Prompts/` folder, `.mcp.json`, `CLAUDE.md` section, and Prompt Runner discovery.
+- `PromptRunnerWindow` (`Window > Claude > Prompt Runner`) — drives `_Prompts/*.md` through `AssistantApi.Run` in Agent mode. Two clicks per prompt: ▶ Run Next + ✓ Mark Done & Delete.
+- Services: `PrereqCheck` (cross-platform Python / uvx detection), `CoplayDevInstaller` (UPM `Client.Add` wrapper), `PromptsFolderProvisioner` (`AssetDatabase.CreateFolder`), `McpJsonWriter` (Newtonsoft.Json merge of `.mcp.json` preserving other servers), `ClaudeMdWriter` (sentinel-bounded section append/replace), `BootstrapSettings` (EditorPrefs wrapper for the prompts folder path).
+- `McpIntegrationApi` delegate registry + `UnityMcpBridge` façade — the asmdef split pattern that lets the package compile on projects without CoplayDev `unity-mcp` installed (gated by `MCP_FOR_UNITY_PRESENT` via `versionDefines`).
+- `Editor/Templates/claude-md-asset-workflow.md` — the canonical "Asset Workflow" section text the bootstrap writes into consumer projects' `CLAUDE.md`.
