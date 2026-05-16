@@ -7,6 +7,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 _Nothing yet._
 
+## [0.1.2] - 2026-05-16
+
+### Fixed
+- `PrereqCheck` now falls back to well-known install locations when `uvx` isn't reachable via the inherited `PATH`. This handles the common case where the user installs `uv` while Unity Hub is already running (Hub captures `PATH` at launch, so the Editor inherits a stale env). When `uvx` is found via the fallback, the Bootstrap step also augments the current Editor process's `PATH` so CoplayDev's bridge (which spawns `uvx` by name) can resolve it without requiring a Unity Hub restart.
+
+### Added
+- `PrereqCheck.Result.UvxPath` — absolute path of the fallback-discovered binary, null when found via `PATH`.
+
 ## [0.1.1] - 2026-05-16
 
 ### Fixed
