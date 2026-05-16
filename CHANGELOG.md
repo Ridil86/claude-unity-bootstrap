@@ -7,6 +7,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 _Nothing yet._
 
+## [0.1.1] - 2026-05-16
+
+### Fixed
+- Added `com.unity.ai.assistant` as a hard dependency in `package.json`. Without it the package failed to compile on Unity 6 projects whose template doesn't auto-include AI Assistant (compile error `CS0234: 'AI' does not exist in the namespace 'Unity'` from `PromptRunnerWindow.cs`). UPM now auto-installs the dependency.
+
 ## [0.1.0] - 2026-05-16
 
 First public release. Lifted from embedded development inside Spiritbound to a standalone Git repo.

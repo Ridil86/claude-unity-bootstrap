@@ -1,6 +1,6 @@
 {
   "name": "com.rockrabbit.claude-unity-bootstrap",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "displayName": "Claude Unity Bootstrap",
   "description": "One-stop installer that wires a Unity project to Claude Code. Verifies prerequisites (Python 3.10+, uvx), installs the CoplayDev unity-mcp bridge, generates .mcp.json, scaffolds Assets/_Prompts/, appends a CLAUDE.md asset-workflow section, and exposes a Prompt Runner that drives _Prompts/*.md through Unity AI Assistant in Agent mode.",
   "unity": "6000.0",
@@ -16,7 +16,8 @@
   "changelogUrl": "https://github.com/Ridil86/claude-unity-bootstrap/blob/main/CHANGELOG.md",
   "licensesUrl": "https://github.com/Ridil86/claude-unity-bootstrap/blob/main/LICENSE.md",
   "dependencies": {
-    "com.unity.nuget.newtonsoft-json": "3.2.1"
+    "com.unity.nuget.newtonsoft-json": "3.2.1",
+    "com.unity.ai.assistant": "2.8.0-pre.1"
   },
   "keywords": [
     "claude",
