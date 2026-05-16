@@ -7,6 +7,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 _Nothing yet._
 
+## [0.1.4] - 2026-05-16
+
+### Fixed
+- Bridge start step no longer shows stale state. `EnsureBridgeRunning` kicks off the HTTP listener but it can take a moment to bind; the wizard now sets the step to `InProgress` and polls `IsBridgeRunning` (10-second timeout) until reachable, so the status flips to ✅ automatically instead of requiring a manual `Refresh status`.
+
+### Added
+- **Step 7 — "Generate smoke test prompt" button.** Drops a tiny pre-canned prompt (`01-SmokeTest.md`) into the prompts folder and opens the Prompt Runner, letting users verify the full md → AssistantApi.Run → asset-creation pipeline end-to-end without writing their own test prompt.
+- **Step 8 — "Verify Claude Code MCP connection".** Final step with instructions for restarting Claude Code, sending a tool-using test prompt, and marking the connection verified. Verification state is project-scoped (persisted in EditorPrefs keyed on the project path hash).
+
 ## [0.1.3] - 2026-05-16
 
 ### Fixed

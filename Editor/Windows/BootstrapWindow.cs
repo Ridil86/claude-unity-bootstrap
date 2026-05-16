@@ -31,6 +31,9 @@ namespace RockRabbit.ClaudeUnityBootstrap.Editor.Windows
         StepStatus bridgeStatus = StepStatus.Unknown;
         string bridgeUrl;
         string bridgeError;
+        double bridgeStartDeadline; // EditorApplication.timeSinceStartup; 0 when no start in flight.
+
+        const string ClaudeCodeVerifiedKey = "RockRabbit.ClaudeBootstrap.ClaudeCodeVerified";
 
         StepStatus promptsFolderStatus = StepStatus.Unknown;
         string promptsFolderError;
@@ -157,6 +160,28 @@ namespace RockRabbit.ClaudeUnityBootstrap.Editor.Windows
 
         void PollAsyncRequests()
         {
+            // Bridge start can be reported by EnsureBridgeRunning before the HTTP listener
+            // has actually bound. Poll IsBridgeRunning() until it flips to true or we time out.
+            if (bridgeStatus == StepStatus.InProgress && bridgeStartDeadline > 0)
+            {
+                if (McpIntegrationApi.IsBridgeRunning?.Invoke() ?? false)
+                {
+                    bridgeStatus = StepStatus.Done;
+                    bridgeUrl = McpIntegrationApi.GetMcpRpcUrl?.Invoke();
+                    bridgeError = null;
+                    bridgeStartDeadline = 0;
+                    RefreshMcpJson();
+                    Repaint();
+                }
+                else if (EditorApplication.timeSinceStartup > bridgeStartDeadline)
+                {
+                    bridgeStatus = StepStatus.Failed;
+                    bridgeError = "Bridge did not become reachable within 10 seconds.";
+                    bridgeStartDeadline = 0;
+                    Repaint();
+                }
+            }
+
             if (activeListRequest != null && activeListRequest.IsCompleted)
             {
                 if (CoplayDevInstaller.TryGetInstalledVersion(activeListRequest, out var version))
@@ -212,17 +237,118 @@ namespace RockRabbit.ClaudeUnityBootstrap.Editor.Windows
             if (!McpIntegrationApi.IsAvailable) return;
             try
             {
-                var ok = McpIntegrationApi.EnsureBridgeRunning?.Invoke() ?? false;
-                bridgeStatus = ok ? StepStatus.Done : StepStatus.Failed;
-                bridgeError = ok ? null : "Bridge did not become reachable after start.";
-                if (ok) bridgeUrl = McpIntegrationApi.GetMcpRpcUrl?.Invoke();
+                // Kick off the start. The HTTP listener can take a moment to bind, so don't
+                // trust the immediate return — switch to InProgress and poll until reachable.
+                McpIntegrationApi.EnsureBridgeRunning?.Invoke();
+                if (McpIntegrationApi.IsBridgeRunning?.Invoke() ?? false)
+                {
+                    bridgeStatus = StepStatus.Done;
+                    bridgeUrl = McpIntegrationApi.GetMcpRpcUrl?.Invoke();
+                    bridgeError = null;
+                    bridgeStartDeadline = 0;
+                    RefreshMcpJson();
+                }
+                else
+                {
+                    bridgeStatus = StepStatus.InProgress;
+                    bridgeError = null;
+                    bridgeStartDeadline = EditorApplication.timeSinceStartup + 10.0;
+                }
             }
             catch (Exception ex)
             {
                 bridgeStatus = StepStatus.Failed;
                 bridgeError = ex.Message;
+                bridgeStartDeadline = 0;
             }
-            RefreshMcpJson();
+        }
+
+        void ActionGenerateSmokeTestPrompt()
+        {
+            var folder = BootstrapSettings.PromptsFolder;
+            if (!PromptsFolderProvisioner.EnsureExists(folder, out var err))
+            {
+                EditorUtility.DisplayDialog("Prompts folder not ready",
+                    $"Couldn't create {folder}: {err}", "OK");
+                return;
+            }
+
+            var absPath = Path.Combine(
+                Path.GetFullPath(Path.Combine(Application.dataPath, "..")),
+                folder.Replace('/', Path.DirectorySeparatorChar),
+                "01-SmokeTest.md");
+
+            if (File.Exists(absPath))
+            {
+                if (!EditorUtility.DisplayDialog("Smoke test already exists",
+                    $"{absPath} already exists. Overwrite?", "Overwrite", "Cancel"))
+                {
+                    return;
+                }
+            }
+
+            File.WriteAllText(absPath, BuildSmokeTestPromptBody());
+            AssetDatabase.Refresh();
+            PromptRunnerWindow.Open();
+        }
+
+        static string BuildSmokeTestPromptBody()
+        {
+            return
+                "# Prompt Runner smoke test\n\n" +
+                "**Type:** material\n" +
+                "**Intended use:** One-time end-to-end test of the Prompt Runner. " +
+                "Confirms that AssistantApi.Run(...) in Agent mode receives this prompt, executes it, " +
+                "and the resulting asset lands at the expected path. Delete the resulting material " +
+                "manually after verification.\n" +
+                "**Style anchors:** N/A — throwaway test asset.\n\n" +
+                "## Prompt\n\n" +
+                "Create exactly one new Material asset at this path:\n\n" +
+                "`Assets/_PromptRunnerSmokeTest.mat`\n\n" +
+                "Use the project's default Lit shader for its current render pipeline " +
+                "(Universal Render Pipeline/Lit if URP is installed, otherwise Standard for the " +
+                "built-in pipeline). Set these properties:\n\n" +
+                "- **Base Color:** pure magenta — RGB (1, 0, 1) / hex #FF00FF, fully opaque (alpha 1).\n" +
+                "- **Metallic:** 0.\n" +
+                "- **Smoothness:** 0.4.\n" +
+                "- Leave every other property at its default.\n\n" +
+                "Do not modify or create any other asset.\n\n" +
+                "## Acceptance criteria\n\n" +
+                "- Exactly one new file exists at `Assets/_PromptRunnerSmokeTest.mat`.\n" +
+                "- Selecting it in the Project window and opening it in the Inspector shows a vivid " +
+                "magenta base color.\n" +
+                "- No other files were created or modified.\n" +
+                "- After verification, this `.md` (Prompt Runner's ✓ Mark Done & Delete handles it) " +
+                "and the test material (delete manually) can both be removed.\n";
+        }
+
+        void ActionMarkClaudeCodeVerified()
+        {
+            EditorPrefs.SetBool(ProjectScopedClaudeCodeKey(), true);
+        }
+
+        void ActionResetClaudeCodeVerification()
+        {
+            EditorPrefs.DeleteKey(ProjectScopedClaudeCodeKey());
+        }
+
+        static string ProjectScopedClaudeCodeKey()
+        {
+            // Scope verification per-project: hash the project root path so different projects
+            // each maintain their own "I've confirmed Claude Code can see this Unity instance" bit.
+            var projectRoot = Path.GetFullPath(Path.Combine(Application.dataPath, ".."));
+            unchecked
+            {
+                int hash = 17;
+                foreach (char c in projectRoot.ToLowerInvariant())
+                    hash = hash * 31 + c;
+                return $"{ClaudeCodeVerifiedKey}.{hash}";
+            }
+        }
+
+        bool IsClaudeCodeVerified()
+        {
+            return EditorPrefs.GetBool(ProjectScopedClaudeCodeKey(), false);
         }
 
         void ActionCreatePromptsFolder()
@@ -331,6 +457,7 @@ namespace RockRabbit.ClaudeUnityBootstrap.Editor.Windows
             DrawStep_McpJson();
             DrawStep_ClaudeMd();
             DrawStep_PromptRunner();
+            DrawStep_ClaudeCodeVerify();
 
             EditorGUILayout.EndScrollView();
         }
@@ -485,9 +612,70 @@ namespace RockRabbit.ClaudeUnityBootstrap.Editor.Windows
         void DrawStep_PromptRunner()
         {
             BeginStep("7. Prompt Runner reachable",
-                "Opens Window > Claude > Prompt Runner so you can confirm the runner appears.",
+                "Opens Window > Claude > Prompt Runner. Optionally generate a one-shot smoke test " +
+                "prompt to verify the full pipeline (md → Assistant Agent mode → asset creation).",
                 StepStatus.Unknown, "");
-            if (GUILayout.Button("Open Prompt Runner", GUILayout.Width(180))) ActionOpenPromptRunner();
+
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                if (GUILayout.Button("Open Prompt Runner", GUILayout.Width(180)))
+                {
+                    ActionOpenPromptRunner();
+                }
+                if (GUILayout.Button("Generate smoke test prompt", GUILayout.Width(220)))
+                {
+                    ActionGenerateSmokeTestPrompt();
+                }
+            }
+
+            EditorGUILayout.HelpBox(
+                "If you click 'Generate smoke test prompt', a tiny prompt drops into the prompts " +
+                "folder and the Prompt Runner opens. Click ▶ Run Next → wait for the Assistant → " +
+                "verify Assets/_PromptRunnerSmokeTest.mat appears with a magenta base color → click " +
+                "✓ Mark Done & Delete. Delete the test material manually when satisfied.",
+                MessageType.Info);
+            EndStep();
+        }
+
+        void DrawStep_ClaudeCodeVerify()
+        {
+            var verified = IsClaudeCodeVerified();
+            BeginStep("8. Verify Claude Code MCP connection",
+                "Final check — confirm Claude Code can reach the Unity MCP bridge.",
+                verified ? StepStatus.Done : StepStatus.Pending,
+                verified
+                    ? "Marked verified on this project."
+                    : "Not yet verified. Restart Claude Code and run the test below.");
+
+            EditorGUILayout.HelpBox(
+                "How to verify:\n" +
+                "1. Quit Claude Code completely (close all windows).\n" +
+                "2. Reopen Claude Code in this project's directory. If prompted to approve the " +
+                "project-scoped MCP server, accept.\n" +
+                "3. In a new conversation, ask Claude something that requires Unity MCP, e.g.:\n" +
+                "   \"List the GameObjects in the current scene.\"\n" +
+                "   Claude should use the mcp__UnityMCP__find_gameobjects tool to answer.\n" +
+                "4. If you see UnityMCP tools being used and the response references real scene " +
+                "data, the connection is live. Click 'I've verified' below.",
+                MessageType.Info);
+
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                if (!verified)
+                {
+                    if (GUILayout.Button("I've verified", GUILayout.Width(180)))
+                    {
+                        ActionMarkClaudeCodeVerified();
+                    }
+                }
+                else
+                {
+                    if (GUILayout.Button("Reset verification", GUILayout.Width(180)))
+                    {
+                        ActionResetClaudeCodeVerification();
+                    }
+                }
+            }
             EndStep();
         }
 
