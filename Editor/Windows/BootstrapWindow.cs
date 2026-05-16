@@ -163,6 +163,12 @@ namespace RockRabbit.ClaudeUnityBootstrap.Editor.Windows
                 {
                     coplayDevStatus = StepStatus.Done;
                     coplayDevVersion = version;
+                    coplayDevError = null; // List is authoritative — clear any spurious Add error.
+                }
+                else if (!string.IsNullOrEmpty(coplayDevError))
+                {
+                    // List confirms not installed AND we have a cached Add error → real failure.
+                    coplayDevStatus = StepStatus.Failed;
                 }
                 else
                 {
@@ -170,26 +176,24 @@ namespace RockRabbit.ClaudeUnityBootstrap.Editor.Windows
                     coplayDevVersion = null;
                 }
                 activeListRequest = null;
+                // Bridge availability and .mcp.json URL both depend on whether CoplayDev is present.
+                RefreshBridge();
+                RefreshMcpJson();
                 Repaint();
             }
 
             if (activeAddRequest != null && activeAddRequest.IsCompleted)
             {
-                if (activeAddRequest.Status == StatusCode.Success)
-                {
-                    coplayDevStatus = StepStatus.Done;
-                    coplayDevVersion = activeAddRequest.Result.version;
-                    coplayDevError = null;
-                }
-                else
-                {
-                    coplayDevStatus = StepStatus.Failed;
-                    coplayDevError = activeAddRequest.Error?.message ?? "Unknown UPM error.";
-                }
+                // UPM's AddRequest can report a non-Success status even when the package was
+                // actually installed (post-install scripts, domain reload, transient state).
+                // Capture the diagnostic, then verify ground truth via Client.List(...) below.
+                coplayDevError = activeAddRequest.Status == StatusCode.Success
+                    ? null
+                    : (activeAddRequest.Error?.message ?? "Unknown UPM error.");
+
                 activeAddRequest = null;
-                // Trigger downstream refreshes (bridge availability changes after install).
-                RefreshBridge();
-                RefreshMcpJson();
+                coplayDevStatus = StepStatus.InProgress;
+                activeListRequest = CoplayDevInstaller.BeginQueryInstalled();
                 Repaint();
             }
         }

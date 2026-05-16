@@ -1,6 +1,6 @@
 {
   "name": "com.rockrabbit.claude-unity-bootstrap",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "displayName": "Claude Unity Bootstrap",
   "description": "One-stop installer that wires a Unity project to Claude Code. Verifies prerequisites (Python 3.10+, uvx), installs the CoplayDev unity-mcp bridge, generates .mcp.json, scaffolds Assets/_Prompts/, appends a CLAUDE.md asset-workflow section, and exposes a Prompt Runner that drives _Prompts/*.md through Unity AI Assistant in Agent mode.",
   "unity": "6000.0",

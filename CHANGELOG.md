@@ -7,6 +7,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 _Nothing yet._
 
+## [0.1.3] - 2026-05-16
+
+### Fixed
+- BootstrapWindow's CoplayDev install step no longer mis-reports "Unknown UPM error" when `Client.Add(...)` returns a non-Success status even though the package was actually installed (UPM behaves this way during post-install scripts / domain reload / transient internal state). The poller now always follows a completed `AddRequest` with a `Client.List(...)` query and treats the list result as the source of truth. Spurious Add errors are cleared when List confirms the package is present. Bridge + `.mcp.json` checks are also re-triggered from the list path so they reflect the post-install state without requiring the user to click "Refresh status" manually.
+
 ## [0.1.2] - 2026-05-16
 
 ### Fixed
