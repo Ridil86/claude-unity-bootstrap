@@ -65,7 +65,7 @@ The wizard will not auto-install Python or `uv` — those usually involve elevat
 In your project's `Packages/manifest.json`, add:
 
 ```json
-"com.rockrabbit.claude-unity-bootstrap": "https://github.com/Ridil86/claude-unity-bootstrap.git#v0.1.0"
+"com.rockrabbit.claude-unity-bootstrap": "https://github.com/Ridil86/claude-unity-bootstrap.git#v0.1.5"
 ```
 
 Pin to a tag so updates are intentional. Use `#main` for bleeding-edge.
